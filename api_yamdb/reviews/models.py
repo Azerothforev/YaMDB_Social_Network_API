@@ -1,5 +1,5 @@
 from django.contrib.auth.models import AbstractUser
-from django.db.models import CharField, TextField
+from django.db.models import CharField, EmailField, TextField
 
 
 class User(AbstractUser):
@@ -18,6 +18,7 @@ class User(AbstractUser):
         null=True,
         max_length=32,
         verbose_name='Код подтверждения')
+    email = EmailField(max_length=254, unique=True)
     role = CharField(
         max_length=10,
         choices=ROLE_CHOICES,
