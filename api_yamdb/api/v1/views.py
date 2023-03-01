@@ -1,14 +1,23 @@
 from django.core.mail import send_mail
+from django.shortcuts import get_object_or_404
 import random
-from rest_framework.mixins import CreateModelMixin
+from rest_framework import status
+from rest_framework.decorators import action, api_view
+from rest_framework.mixins import CreateModelMixin, RetrieveModelMixin
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
+from rest_framework_simplejwt.tokens import RefreshToken
 import string
 
 from reviews.models import User
-from .serializers import UserSignUpSerializer
+from .permissions import IsAdmin, IsModerator, IsSuperuser
+from .serializers import UserSignUpSerializer, UsersSerializer
 
-EMAIL_TEXT_SBJ = 'YaMDB'
-EMAIL_TEXT: str = (
+CONFIRM_CODE_LENGTH: str = 32
+EMAIL_FROM: str = 'YaMDB@yandex.ru'
+EMAIL_SBJ: str = 'YaMDB registration successful!'
+EMAIL_MESSAGE: str = (
     'Добро пожаловать на YaMDB - самый лучший сайт по предоставлению народных '
     'рецензий на книги, музыку, фильмы и многое другое!\n\nДля получения '
     'доступа к сайту, пожалуйста, отправьте POST запрос на адрес '
@@ -19,36 +28,97 @@ EMAIL_TEXT: str = (
 
 def generate_confirmation_code() -> str:
     """Генерирует случайную последовательность символов."""
-    LENGTH: str = 32
     chars: str = string.ascii_letters + string.digits
-    return ''.join(random.choice(chars) for i in range(LENGTH))
+    return ''.join(random.choice(chars) for i in range(CONFIRM_CODE_LENGTH))
 
 
 def send_email(confirmation_code: str, address: str) -> True:
     """Отправляет сообщение с заданным текстом на указанный почтовый адрес."""
     send_mail(
-        subject=EMAIL_TEXT_SBJ,
-        message=EMAIL_TEXT.format(confirmation_code),
-        from_email='YaMDB@yandex.ru',
+        subject=EMAIL_SBJ,
+        message=EMAIL_MESSAGE.format(confirmation_code),
+        from_email=EMAIL_FROM,
         recipient_list=[address])
     return True
 
 
-class AuthSignupViewSet(CreateModelMixin, GenericViewSet):
+class CreateRetrieveViewSet(
+    GenericViewSet, CreateModelMixin, RetrieveModelMixin):
+    pass
+
+
+class AuthSignupViewSet(GenericViewSet, CreateModelMixin):
     """Производит регистрацию нового пользователя. Отправляет электронное
     письмо с confirmation_code для получения JWT access token'a.
     """
     serializer_class = UserSignUpSerializer
     queryset = User.objects.all()
 
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
+        if 'username' in request.data and 'email' in request.data:
+            if request.data['username'] == 'me':
+                err = {
+                    "username": [
+                    "Username is invalid."]}
+                return Response(err, status=status.HTTP_400_BAD_REQUEST)
+            elif self.queryset.filter(
+                username=request.data['username'],
+                email=request.data['email']).exists():
+                return Response(
+                    User.objects.get(
+                        username=request.data['username']).confirmation_code,
+                    status=status.HTTP_200_OK)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         confirmation_code = generate_confirmation_code()
-        send_email(
+        message = send_email(
             confirmation_code=confirmation_code,
             address=serializer.validated_data['email'])
-        return serializer.save(confirmation_code=confirmation_code)
+        if message:
+            serializer.save(confirmation_code=confirmation_code)
+            return Response(
+                serializer.data,
+                status=status.HTTP_200_OK)
+        else:
+            err = {
+                    "Server error": [
+                    "Please, come back and try again later!"]}
+            return Response(err, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
-class AuthTokenViewSet(CreateModelMixin, GenericViewSet):
-    """Производит выдачу JWT access токена."""
-    pass
+@api_view(('POST',))
+def AuthToken(request):
+    """Производит выдачу JWT-токена взамен username и confirmation code."""
+    err: dict = {}
+    for key in ('username', 'confirmation_code'):
+        if key not in request.data:
+            err[f"{key}"] = ["This field is required."]
+    if err:
+        return Response(err, status=status.HTTP_400_BAD_REQUEST)
+    user = get_object_or_404(User, username=request.data['username'])
+    if user.confirmation_code != request.data['confirmation_code']:
+        err = {
+                f"'confirmation_code'": [
+                "Confirmation_code is invalid."]}
+        return Response(err, status=status.HTTP_400_BAD_REQUEST)
+    access_token = {'token': str(RefreshToken.for_user(user).access_token)}
+    return Response(access_token, status=status.HTTP_200_OK)
+
+
+class UsersViewSet(CreateRetrieveViewSet):
+    permission_classes = (IsAuthenticated,)
+    serializer_class = UsersSerializer
+    queryset = User.objects.all()
+
+    @action(detail=False, methods=['get', 'patch'], url_path='me')
+    def users_me(self, request):
+        user = get_object_or_404(User, username=request.user.username)
+        if request.method == 'GET':
+            serializer = self.get_serializer(user)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        if request.method == 'PATCH':
+            serializer = self.get_serializer(user, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+            serializer = self.get_serializer(user)
+            return Response(serializer.data, status=status.HTTP_200_OK)
