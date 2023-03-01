@@ -10,8 +10,9 @@ class UserSignUpSerializer(ModelSerializer):
         fields = ('username', 'email')
 
 
-class UserTokenSerializer(ModelSerializer):
+class UsersSerializer(ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('username', 'confirmation_code')
+        fields = (
+            'username', 'email', 'first_name', 'last_name', 'bio', 'role')
