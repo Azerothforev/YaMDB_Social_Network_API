@@ -110,29 +110,25 @@ class UsersViewSet(ModelViewSet):
     lookup_field = "username"
     permission_classes = (IsAdmin,)
     search_fields = ('username',)
+    serializer_class = UsersSerializerAdmin
     queryset = User.objects.all()
-
-    def get_serializer_class(self):
-        if self.request.path == '/api/v1/users/me/':
-            serializer = UsersSerializer
-        else:
-            serializer = UsersSerializerAdmin
-        return serializer
 
     @action(
         detail=False,
         methods=('get', 'patch'),
         url_path='me',
-        permission_classes=(IsAuthenticated, DeleteGetPatchPermission))
+        permission_classes=(IsAuthenticated, DeleteGetPatchPermission),
+        serializer_class=UsersSerializer)
     def users_me(self, request):
-        user = get_object_or_404(User, username=request.user.username)
+        user = request.user
         if request.method == 'GET':
-            serializer = UsersSerializer(user)
+            serializer = self.get_serializer(user)
             return Response(serializer.data, status=status.HTTP_200_OK)
         if request.method == 'PATCH':
-            serializer = UsersSerializer(
+            serializer = self.get_serializer(
                 user, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
-            serializer = UsersSerializer(user)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+                serializer = self.get_serializer(user)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(status=status.HTTP_400_BAD_REQUEST)
