@@ -3,7 +3,7 @@ from django.shortcuts import get_object_or_404
 import random
 from rest_framework import status
 from rest_framework.decorators import action, api_view
-from rest_framework.mixins import CreateModelMixin, RetrieveModelMixin
+from rest_framework.mixins import CreateModelMixin, ListModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
@@ -11,7 +11,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 import string
 
 from reviews.models import User
-from .permissions import IsAdmin, IsModerator, IsSuperuser
+from .permissions import IsAdmin
 from .serializers import UserSignUpSerializer, UsersSerializer
 
 CONFIRM_CODE_LENGTH: str = 32
@@ -42,11 +42,6 @@ def send_email(confirmation_code: str, address: str) -> True:
     return True
 
 
-class CreateRetrieveViewSet(
-    GenericViewSet, CreateModelMixin, RetrieveModelMixin):
-    pass
-
-
 class AuthSignupViewSet(GenericViewSet, CreateModelMixin):
     """Производит регистрацию нового пользователя. Отправляет электронное
     письмо с confirmation_code для получения JWT access token'a.
@@ -57,13 +52,11 @@ class AuthSignupViewSet(GenericViewSet, CreateModelMixin):
     def create(self, request, *args, **kwargs):
         if 'username' in request.data and 'email' in request.data:
             if request.data['username'] == 'me':
-                err = {
-                    "username": [
-                    "Username is invalid."]}
+                err = {"username": ["Username is invalid."]}
                 return Response(err, status=status.HTTP_400_BAD_REQUEST)
             elif self.queryset.filter(
-                username=request.data['username'],
-                email=request.data['email']).exists():
+                    username=request.data['username'],
+                    email=request.data['email']).exists():
                 return Response(
                     User.objects.get(
                         username=request.data['username']).confirmation_code,
@@ -80,9 +73,7 @@ class AuthSignupViewSet(GenericViewSet, CreateModelMixin):
                 serializer.data,
                 status=status.HTTP_200_OK)
         else:
-            err = {
-                    "Server error": [
-                    "Please, come back and try again later!"]}
+            err = {"Server error": ["Please, come back and try again later!"]}
             return Response(err, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
@@ -97,18 +88,27 @@ def AuthToken(request):
         return Response(err, status=status.HTTP_400_BAD_REQUEST)
     user = get_object_or_404(User, username=request.data['username'])
     if user.confirmation_code != request.data['confirmation_code']:
-        err = {
-                f"'confirmation_code'": [
-                "Confirmation_code is invalid."]}
+        err = {"confirmation_code": ["Confirmation_code is invalid."]}
         return Response(err, status=status.HTTP_400_BAD_REQUEST)
     access_token = {'token': str(RefreshToken.for_user(user).access_token)}
     return Response(access_token, status=status.HTTP_200_OK)
 
 
-class UsersViewSet(CreateRetrieveViewSet):
-    permission_classes = (IsAuthenticated,)
+class UsersViewSet(GenericViewSet, ListModelMixin, CreateModelMixin):
+    """Для пользователя с уровнем прав не менее "user", позволяет получить
+    или частично изменить свои данные (кроме значения поля "role").
+    Для пользователя с уровнем прав не менее "admin" позволяет получить
+    список всех пользователей или создать нового.
+    """
     serializer_class = UsersSerializer
     queryset = User.objects.all()
+
+    def get_permissions(self):
+        if self.request.path == '/api/v1/users/me/':
+            permission_classes = (IsAuthenticated,)
+        else:
+            permission_classes = (IsAdmin,)
+        return [permission() for permission in permission_classes]
 
     @action(detail=False, methods=['get', 'patch'], url_path='me')
     def users_me(self, request):
@@ -117,7 +117,8 @@ class UsersViewSet(CreateRetrieveViewSet):
             serializer = self.get_serializer(user)
             return Response(serializer.data, status=status.HTTP_200_OK)
         if request.method == 'PATCH':
-            serializer = self.get_serializer(user, data=request.data, partial=True)
+            serializer = self.get_serializer(
+                user, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
             serializer = self.get_serializer(user)
