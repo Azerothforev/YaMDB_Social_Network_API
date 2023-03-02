@@ -3,16 +3,20 @@ from django.shortcuts import get_object_or_404
 import random
 from rest_framework import status
 from rest_framework.decorators import action, api_view
-from rest_framework.mixins import CreateModelMixin, ListModelMixin
+from rest_framework.filters import SearchFilter
+from rest_framework.mixins import CreateModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.viewsets import GenericViewSet
+from rest_framework.viewsets import GenericViewSet, ModelViewSet
 from rest_framework_simplejwt.tokens import RefreshToken
 import string
 
 from reviews.models import User
-from .permissions import IsAdmin
-from .serializers import UserSignUpSerializer, UsersSerializer
+from .permissions import DeleteGetPatchPermission, IsAdmin
+from .serializers import (
+    UserSignUpSerializer,
+    UsersSerializer,
+    UsersSerializerAdmin)
 
 CONFIRM_CODE_LENGTH: str = 32
 EMAIL_FROM: str = 'YaMDB@yandex.ru'
@@ -94,21 +98,32 @@ def AuthToken(request):
     return Response(access_token, status=status.HTTP_200_OK)
 
 
-class UsersViewSet(GenericViewSet, ListModelMixin, CreateModelMixin):
+class UsersViewSet(ModelViewSet):
     """Для пользователя с уровнем прав не менее "user", позволяет получить
     или частично изменить свои данные (кроме значения поля "role").
     Для пользователя с уровнем прав не менее "admin" позволяет получить
-    список всех пользователей или создать нового.
+    список всех пользователей или создать нового, а также получить, изменить
+    или удалить данные любого пользователя по username.
     """
-    serializer_class = UsersSerializer
+    lookup_field = "username"
     queryset = User.objects.all()
+    filter_backends = (SearchFilter,)
+    search_fields = ('username',)
+    http_method_names = ('delete', 'get', 'patch', 'post')
 
     def get_permissions(self):
         if self.request.path == '/api/v1/users/me/':
-            permission_classes = (IsAuthenticated,)
+            permission_classes = (IsAuthenticated, DeleteGetPatchPermission)
         else:
             permission_classes = (IsAdmin,)
         return [permission() for permission in permission_classes]
+
+    def get_serializer_class(self):
+        if self.request.path == '/api/v1/users/me/':
+            serializer = UsersSerializer
+        else:
+            serializer = UsersSerializerAdmin
+        return serializer
 
     @action(detail=False, methods=['get', 'patch'], url_path='me')
     def users_me(self, request):
