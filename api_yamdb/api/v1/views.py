@@ -8,7 +8,7 @@ from rest_framework.mixins import CreateModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import AccessToken
 import string
 
 from reviews.models import User
@@ -94,7 +94,7 @@ def AuthToken(request):
     if user.confirmation_code != request.data['confirmation_code']:
         err = {"confirmation_code": ["Confirmation_code is invalid."]}
         return Response(err, status=status.HTTP_400_BAD_REQUEST)
-    access_token = {'token': str(RefreshToken.for_user(user).access_token)}
+    access_token = {'token': str(AccessToken.for_user(user).access_token)}
     return Response(access_token, status=status.HTTP_200_OK)
 
 
