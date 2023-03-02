@@ -105,18 +105,12 @@ class UsersViewSet(ModelViewSet):
     список всех пользователей или создать нового, а также получить, изменить
     или удалить данные любого пользователя по username.
     """
-    lookup_field = "username"
-    queryset = User.objects.all()
     filter_backends = (SearchFilter,)
-    search_fields = ('username',)
     http_method_names = ('delete', 'get', 'patch', 'post')
-
-    def get_permissions(self):
-        if self.request.path == '/api/v1/users/me/':
-            permission_classes = (IsAuthenticated, DeleteGetPatchPermission)
-        else:
-            permission_classes = (IsAdmin,)
-        return [permission() for permission in permission_classes]
+    lookup_field = "username"
+    permission_classes = (IsAdmin,)
+    search_fields = ('username',)
+    queryset = User.objects.all()
 
     def get_serializer_class(self):
         if self.request.path == '/api/v1/users/me/':
@@ -125,16 +119,20 @@ class UsersViewSet(ModelViewSet):
             serializer = UsersSerializerAdmin
         return serializer
 
-    @action(detail=False, methods=['get', 'patch'], url_path='me')
+    @action(
+        detail=False,
+        methods=('get', 'patch'),
+        url_path='me',
+        permission_classes=(IsAuthenticated, DeleteGetPatchPermission))
     def users_me(self, request):
         user = get_object_or_404(User, username=request.user.username)
         if request.method == 'GET':
-            serializer = self.get_serializer(user)
+            serializer = UsersSerializer(user)
             return Response(serializer.data, status=status.HTTP_200_OK)
         if request.method == 'PATCH':
-            serializer = self.get_serializer(
+            serializer = UsersSerializer(
                 user, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
-            serializer = self.get_serializer(user)
+            serializer = UsersSerializer(user)
             return Response(serializer.data, status=status.HTTP_200_OK)
