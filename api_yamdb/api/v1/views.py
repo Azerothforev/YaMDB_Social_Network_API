@@ -19,15 +19,26 @@ from .serializers import (
     UsersSerializerAdmin)
 
 CONFIRM_CODE_LENGTH: str = 32
-EMAIL_FROM: str = 'YaMDB@yandex.ru'
-EMAIL_SBJ: str = 'YaMDB registration successful!'
-EMAIL_MESSAGE: str = (
+EMAIL_MESSAGE_REGISTER: str = (
     'Добро пожаловать на YaMDB - самый лучший сайт по предоставлению народных '
     'рецензий на книги, музыку, фильмы и многое другое!\n\nДля получения '
     'доступа к сайту, пожалуйста, отправьте POST запрос на адрес '
     'http://127.0.0.1:8000/api/v1/auth/token/ для получения JWT-токена.\n\n'
     'Обращаем ваше внимание, что в теле запроса необходимо использовать '
-    'следующий confirmation code (без кавычек):\n"{}"')
+    'следующий confirmation code (без кавычек):\n"{}"\n\nДанное письмо было'
+    'сформировано автоматически, пожалуйста, не отвечайте на его.\n\nЕсли Вы'
+    'не указывали свою почту для регистрации на сайте YaMDB, пожалуйста, '
+    'проигнорируйте это сообщение.')
+EMAIL_MESSAGE_RESTORE: str = (
+    'Здравствуйте,\n\nВы получили это письмо, потому что запросили '
+    'восстановление доступа к сайту YaMDB.\n\nНапоминаем Вам, что для '
+    'получения доступа необходимо отправить POST запрос на адрес '
+    'http://127.0.0.1:8000/api/v1/auth/token/ для получения JWT-токена.\n\n'
+    'Обращаем ваше внимание, что в теле запроса необходимо использовать '
+    'следующий confirmation code (без кавычек):\n"{}"\n\nДанное письмо было'
+    'сформировано автоматически, пожалуйста, не отвечайте на его.\n\nЕсли Вы'
+    'не указывали свою почту для регистрации на сайте YaMDB, пожалуйста, '
+    'проигнорируйте это сообщение.')
 
 
 def generate_confirmation_code() -> str:
@@ -36,12 +47,12 @@ def generate_confirmation_code() -> str:
     return ''.join(random.choice(chars) for i in range(CONFIRM_CODE_LENGTH))
 
 
-def send_email(confirmation_code: str, address: str) -> True:
+def send_email(message: str, address: str) -> True:
     """Отправляет сообщение с заданным текстом на указанный почтовый адрес."""
     send_mail(
-        subject=EMAIL_SBJ,
-        message=EMAIL_MESSAGE.format(confirmation_code),
-        from_email=EMAIL_FROM,
+        subject='YaMDB registration',
+        message=message,
+        from_email='YaMDB@yandex.ru',
         recipient_list=[address])
     return True
 
@@ -58,31 +69,34 @@ class AuthSignupViewSet(GenericViewSet, CreateModelMixin):
             if request.data['username'] == 'me':
                 err = {"username": ["Username is invalid."]}
                 return Response(err, status=status.HTTP_400_BAD_REQUEST)
-            elif self.queryset.filter(
+            try:
+                user = User.objects.get(
                     username=request.data['username'],
-                    email=request.data['email']).exists():
-                return Response(
-                    User.objects.get(
-                        username=request.data['username']).confirmation_code,
-                    status=status.HTTP_200_OK)
+                    email=request.data['email'])
+                message = send_email(
+                    message=EMAIL_MESSAGE_RESTORE.format(
+                        user.confirmation_code),
+                    address=user.email)
+                if message:
+                    return Response(request.data, status=status.HTTP_200_OK)
+            except Exception:
+                pass
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         confirmation_code = generate_confirmation_code()
         message = send_email(
-            confirmation_code=confirmation_code,
+            message=EMAIL_MESSAGE_REGISTER.format(confirmation_code),
             address=serializer.validated_data['email'])
         if message:
             serializer.save(confirmation_code=confirmation_code)
-            return Response(
-                serializer.data,
-                status=status.HTTP_200_OK)
+            return Response(serializer.data, status=status.HTTP_200_OK)
         else:
             err = {"Server error": ["Please, come back and try again later!"]}
             return Response(err, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 @api_view(('POST',))
-def AuthToken(request):
+def auth_token(request):
     """Производит выдачу JWT-токена взамен username и confirmation code."""
     err: dict = {}
     for key in ('username', 'confirmation_code'):
