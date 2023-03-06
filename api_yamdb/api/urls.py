@@ -5,7 +5,9 @@ from .v1.views import (
     auth_token,
     AuthSignupViewSet,
     CategoryViewSet,
+    CommentViewSet,
     GenreViewSet,
+    ReviewViewSet,
     TitleViewSet,
     UsersViewSet)
 
@@ -21,6 +23,9 @@ v1_router_patterns = [
     ('categories', CategoryViewSet, 'categories'),
     ('genres', GenreViewSet, 'genres'),
     ('titles', TitleViewSet, 'titles'),
+    (r'titles/(?P<title_id>\d+)/reviews', ReviewViewSet, 'reviews'),
+    (r'titles/(?P<title_id>\d+)/reviews/(?P<review_id>\d+)/comments',
+     CommentViewSet, 'comments'),
     ('users', UsersViewSet, 'users')]
 
 router_register_func(router=v1_router, patterns=v1_router_patterns)

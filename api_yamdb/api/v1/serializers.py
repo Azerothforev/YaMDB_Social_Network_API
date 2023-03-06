@@ -1,6 +1,11 @@
-from rest_framework.serializers import ModelSerializer, SlugRelatedField
+from django.shortcuts import get_object_or_404
+from rest_framework.serializers import (
+    ModelSerializer,
+    IntegerField,
+    SlugRelatedField,
+    ValidationError)
 
-from reviews.models import Category, Genre, Title, User
+from reviews.models import Category, Comment, Genre, Title, Review, User
 
 
 class CategoryField(SlugRelatedField):
@@ -15,10 +20,14 @@ class CategorySerializer(ModelSerializer):
         fields = ('name', 'slug')
 
 
-class GenreField(SlugRelatedField):
+class CommentSerializer(ModelSerializer):
+    author = SlugRelatedField(
+        read_only=True,
+        slug_field='username')
 
-    def to_representation(self, value):
-        return GenreSerializer(value).data
+    class Meta:
+        model = Comment
+        fields = ('id', 'text', 'author', 'pub_date')
 
 
 class GenreSerializer(ModelSerializer):
@@ -26,6 +35,12 @@ class GenreSerializer(ModelSerializer):
         model = Genre
         fields = ('name', 'slug')
         ordering = ('name',)
+
+
+class GenreField(SlugRelatedField):
+
+    def to_representation(self, value):
+        return GenreSerializer(value).data
 
 
 class TitleSerializer(ModelSerializer):
@@ -38,10 +53,35 @@ class TitleSerializer(ModelSerializer):
         queryset=Genre.objects.all(),
         required=False,
         slug_field='slug')
+    rating = IntegerField(
+        required=False)
 
     class Meta:
         model = Title
-        fields = ('id', 'name', 'year', 'description', 'genre', 'category')
+        fields = (
+            'id', 'name', 'year', 'rating', 'description', 'genre', 'category')
+
+
+class ReviewSerializer(ModelSerializer):
+    author = SlugRelatedField(
+        slug_field='username',
+        read_only=True)
+
+    class Meta:
+        model = Review
+        fields = ('id', 'text', 'author', 'score', 'pub_date')
+
+    def validate(self, data):
+        if self.context['request'].method != 'POST':
+            return data
+        title = get_object_or_404(
+            Title,
+            pk=self.context['view'].kwargs.get('title_id'))
+        author = self.context['request'].user
+        if Review.objects.filter(title_id=title, author=author).exists():
+            raise ValidationError(
+                'Вы уже оставляли обзор на данное произведение')
+        return data
 
 
 class UserSignUpSerializer(ModelSerializer):

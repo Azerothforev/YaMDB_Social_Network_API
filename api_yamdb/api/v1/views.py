@@ -1,12 +1,15 @@
 from django.core.mail import send_mail
+from django.db.models import Avg
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 import random
 from rest_framework import status
 from rest_framework.decorators import action, api_view
 from rest_framework.filters import SearchFilter
-from rest_framework.mixins import CreateModelMixin
-from rest_framework.pagination import LimitOffsetPagination
+from rest_framework.mixins import (
+    CreateModelMixin,
+    DestroyModelMixin,
+    ListModelMixin)
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
@@ -14,15 +17,21 @@ from rest_framework_simplejwt.tokens import AccessToken
 import string
 
 from .filters import TitleFilter
-from .permissions import DeleteGetPatchPermission, IsAdmin, IsAdminOrReadOnly
+from .permissions import (
+    DeleteGetPatchPermission,
+    IsAdmin,
+    IsAdminOrReadOnly,
+    IsAuthorOrAdminOrReadOnly)
 from .serializers import (
     CategorySerializer,
+    CommentSerializer,
     GenreSerializer,
+    ReviewSerializer,
     TitleSerializer,
     UserSignUpSerializer,
     UsersSerializer,
     UsersSerializerAdmin)
-from reviews.models import Category, Genre, Title, User
+from reviews.models import Category, Genre, Review, Title, User
 
 CONFIRM_CODE_LENGTH: str = 32
 EMAIL_MESSAGE_REGISTER: str = (
@@ -61,6 +70,12 @@ def send_email(message: str, address: str) -> True:
         recipient_list=[address],
         subject='YaMDB registration')
     return True
+
+
+class CreateDestroyList(
+        GenericViewSet, CreateModelMixin, DestroyModelMixin, ListModelMixin):
+    """Класс-шаблон."""
+    pass
 
 
 class AuthSignupViewSet(GenericViewSet, CreateModelMixin):
@@ -118,58 +133,89 @@ def auth_token(request):
     return Response(access_token, status=status.HTTP_200_OK)
 
 
-class CategoryViewSet(ModelViewSet):
+class CategoryViewSet(CreateDestroyList):
     """Для любого пользователя позволяет получить список всех категорий.
     Для пользователя с уровнем прав не менее "admin" позволяет создать или
     удалить категорию по slug полю.
     """
     filter_backends = (SearchFilter,)
     lookup_field = 'slug'
-    pagination_class = LimitOffsetPagination
     permission_classes = (IsAdminOrReadOnly,)
     search_fields = ('name',)
     serializer_class = CategorySerializer
     queryset = Category.objects.all()
 
-    def retrieve(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
-    def update(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+class CommentViewSet(ModelViewSet):
+    """Для любого пользователя позволяет получить список всех комментариев к
+    отзыву или какого-то определенного по id.
+    Для пользователя с уровнем прав не менее "user" позволяет создать
+    комментариев к любому отзыву.
+    Для пользователя с уровнем прав не менее "moderator" или автору позволяет
+    частично обновить или удалить комментарий по id.
+    """
+    serializer_class = CommentSerializer
+    permission_classes = (IsAuthorOrAdminOrReadOnly,)
+
+    def get_review(self, get_data):
+        return get_object_or_404(Review, pk=get_data.get('review_id'))
+
+    def get_queryset(self):
+        return self.get_review(get_data=self.kwargs).comments.all()
+
+    def perform_create(self, serializer):
+        serializer.save(
+            author=self.request.user,
+            review=self.get_review(get_data=self.kwargs))
 
 
-class GenreViewSet(ModelViewSet):
+class GenreViewSet(CreateDestroyList):
     """Для любого пользователя позволяет получить список всех жанров.
     Для пользователя с уровнем прав не менее "admin" позволяет создать или
     удалить жанр по slug полю.
     """
     filter_backends = (SearchFilter,)
     lookup_field = 'slug'
-    pagination_class = LimitOffsetPagination
     permission_classes = (IsAdminOrReadOnly,)
     search_fields = ('name',)
     serializer_class = GenreSerializer
     queryset = Genre.objects.all()
-
-    def retrieve(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    def update(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 class TitleViewSet(ModelViewSet):
     """Для любого пользователя позволяет получить список всех произведений
     или информацию о конкретном произведении.
     Для пользователя с уровнем прав не менее "admin" позволяет создать,
-    частично обновить или удалить произведение по ID.
+    частично обновить или удалить произведение по id.
     """
     filter_backends = (DjangoFilterBackend,)
     filterset_class = TitleFilter
-    queryset = Title.objects.all()
-    pagination_class = LimitOffsetPagination
     permission_classes = (IsAdminOrReadOnly,)
     serializer_class = TitleSerializer
+    queryset = Title.objects.annotate(rating=Avg('reviews__score'))
+
+
+class ReviewViewSet(ModelViewSet):
+    """Для любого пользователя позволяет получить список всех отзывов к
+    произведению или какого-то определенного по id.
+    Для пользователя с уровнем прав не менее "user" позволяет создать
+    отзыв к любому произведению.
+    Для пользователя с уровнем прав не менее "moderator" или автору позволяет
+    частично обновить или удалить отзыв по id.
+    """
+    serializer_class = ReviewSerializer
+    permission_classes = (IsAuthorOrAdminOrReadOnly,)
+
+    def get_queryset(self):
+        title_id = self.kwargs.get('title_id')
+        title = get_object_or_404(Title, pk=title_id)
+        title_queryset = title.reviews.all()
+        return title_queryset
+
+    def perform_create(self, serializer):
+        title_id = self.kwargs.get('title_id')
+        title = get_object_or_404(Title, pk=title_id)
+        serializer.save(author=self.request.user, title=title)
 
 
 class UsersViewSet(ModelViewSet):
