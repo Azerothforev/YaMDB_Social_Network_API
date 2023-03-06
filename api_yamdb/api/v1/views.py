@@ -50,10 +50,10 @@ def generate_confirmation_code() -> str:
 def send_email(message: str, address: str) -> True:
     """Отправляет сообщение с заданным текстом на указанный почтовый адрес."""
     send_mail(
-        subject='YaMDB registration',
-        message=message,
         from_email='YaMDB@yandex.ru',
-        recipient_list=[address])
+        message=message,
+        recipient_list=[address],
+        subject='YaMDB registration')
     return True
 
 
