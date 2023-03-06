@@ -1,4 +1,10 @@
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import (
+    BasePermission, IsAdminUser, SAFE_METHODS)
+
+
+class DeleteGetPatchPermission(BaseException):
+    def has_permission(self, request, view):
+        return request.method in ('GET', 'PATCH', 'DELETE')
 
 
 class IsAdmin(BasePermission):
@@ -9,6 +15,7 @@ class IsAdmin(BasePermission):
                 or request.user.is_superuser))
 
 
-class DeleteGetPatchPermission(BaseException):
+class IsAdminOrReadOnly(IsAdminUser):
     def has_permission(self, request, view):
-        return request.method in ('GET', 'PATCH', 'DELETE')
+        return request.method in SAFE_METHODS or (
+            request.user.is_authenticated and request.user.role == 'admin')

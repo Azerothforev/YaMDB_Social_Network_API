@@ -1,7 +1,13 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .v1.views import auth_token, AuthSignupViewSet, UsersViewSet
+from .v1.views import (
+    auth_token,
+    AuthSignupViewSet,
+    CategoryViewSet,
+    GenreViewSet,
+    TitleViewSet,
+    UsersViewSet)
 
 
 def router_register_func(router, patterns):
@@ -12,6 +18,9 @@ def router_register_func(router, patterns):
 v1_router = DefaultRouter()
 v1_router_patterns = [
     ('auth/signup', AuthSignupViewSet, 'signup'),
+    ('categories', CategoryViewSet, 'categories'),
+    ('genres', GenreViewSet, 'genres'),
+    ('titles', TitleViewSet, 'titles'),
     ('users', UsersViewSet, 'users')]
 
 router_register_func(router=v1_router, patterns=v1_router_patterns)

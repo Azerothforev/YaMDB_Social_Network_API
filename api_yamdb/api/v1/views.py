@@ -1,22 +1,28 @@
 from django.core.mail import send_mail
 from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
 import random
 from rest_framework import status
 from rest_framework.decorators import action, api_view
 from rest_framework.filters import SearchFilter
 from rest_framework.mixins import CreateModelMixin
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 from rest_framework_simplejwt.tokens import AccessToken
 import string
 
-from reviews.models import User
-from .permissions import DeleteGetPatchPermission, IsAdmin
+from .filters import TitleFilter
+from .permissions import DeleteGetPatchPermission, IsAdmin, IsAdminOrReadOnly
 from .serializers import (
+    CategorySerializer,
+    GenreSerializer,
+    TitleSerializer,
     UserSignUpSerializer,
     UsersSerializer,
     UsersSerializerAdmin)
+from reviews.models import Category, Genre, Title, User
 
 CONFIRM_CODE_LENGTH: str = 32
 EMAIL_MESSAGE_REGISTER: str = (
@@ -112,6 +118,60 @@ def auth_token(request):
     return Response(access_token, status=status.HTTP_200_OK)
 
 
+class CategoryViewSet(ModelViewSet):
+    """Для любого пользователя позволяет получить список всех категорий.
+    Для пользователя с уровнем прав не менее "admin" позволяет создать или
+    удалить категорию по slug полю.
+    """
+    filter_backends = (SearchFilter,)
+    lookup_field = 'slug'
+    pagination_class = LimitOffsetPagination
+    permission_classes = (IsAdminOrReadOnly,)
+    search_fields = ('name',)
+    serializer_class = CategorySerializer
+    queryset = Category.objects.all()
+
+    def retrieve(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def update(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+class GenreViewSet(ModelViewSet):
+    """Для любого пользователя позволяет получить список всех жанров.
+    Для пользователя с уровнем прав не менее "admin" позволяет создать или
+    удалить жанр по slug полю.
+    """
+    filter_backends = (SearchFilter,)
+    lookup_field = 'slug'
+    pagination_class = LimitOffsetPagination
+    permission_classes = (IsAdminOrReadOnly,)
+    search_fields = ('name',)
+    serializer_class = GenreSerializer
+    queryset = Genre.objects.all()
+
+    def retrieve(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def update(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+class TitleViewSet(ModelViewSet):
+    """Для любого пользователя позволяет получить список всех произведений
+    или информацию о конкретном произведении.
+    Для пользователя с уровнем прав не менее "admin" позволяет создать,
+    частично обновить или удалить произведение по ID.
+    """
+    filter_backends = (DjangoFilterBackend,)
+    filterset_class = TitleFilter
+    queryset = Title.objects.all()
+    pagination_class = LimitOffsetPagination
+    permission_classes = (IsAdminOrReadOnly,)
+    serializer_class = TitleSerializer
+
+
 class UsersViewSet(ModelViewSet):
     """Для пользователя с уровнем прав не менее "user", позволяет получить
     или частично изменить свои данные (кроме значения поля "role").
@@ -121,7 +181,7 @@ class UsersViewSet(ModelViewSet):
     """
     filter_backends = (SearchFilter,)
     http_method_names = ('delete', 'get', 'patch', 'post')
-    lookup_field = "username"
+    lookup_field = 'username'
     permission_classes = (IsAdmin,)
     search_fields = ('username',)
     serializer_class = UsersSerializerAdmin
