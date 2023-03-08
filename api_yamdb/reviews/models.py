@@ -95,10 +95,10 @@ class User(AbstractUser):
     ADMIN = 'admin'
     SUPERUSER = 'superuser'
     ROLE_CHOICES = [
-        (USER, 'user'),
-        (MODERATOR, 'moderator'),
-        (ADMIN, 'admin'),
-        (SUPERUSER, 'superuser')]
+        (USER, 'пользователь'),
+        (MODERATOR, 'модератор'),
+        (ADMIN, 'администратор'),
+        (SUPERUSER, 'суперпользователь')]
     bio = TextField(
         blank=True,
         null=True,
