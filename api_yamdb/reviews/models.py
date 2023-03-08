@@ -28,7 +28,7 @@ def role_max_length(role_list):
     return max_length
 
 
-# Внимание! Не нужно создавать BaseTextModel для Comment и Review, так как
+# TODO: Не нужно создавать BaseTextModel для Comment и Review, так как
 # в этом случае сервер не сможет запуститься с ошибкой:
 # reviews.Comment.review: (models.E006) The field 'review' clashes with the
 # field 'review' from model 'reviews.basetextmodel'.
