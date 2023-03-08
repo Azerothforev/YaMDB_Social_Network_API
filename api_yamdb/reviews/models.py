@@ -87,11 +87,15 @@ class Title(Model):
 
 class User(AbstractUser):
     """Модель пользователей."""
+    USER = 'user'
+    MODERATOR = 'moderator'
+    ADMIN = 'admin'
+    SUPERUSER = 'superuser'
     ROLE_CHOICES = [
-        ('user', 'user'),
-        ('moderator', 'moderator'),
-        ('admin', 'admin'),
-        ('superuser', 'superuser')]
+        (USER, 'user'),
+        (MODERATOR, 'moderator'),
+        (ADMIN, 'admin'),
+        (SUPERUSER, 'superuser')]
     bio = TextField(
         blank=True,
         null=True,
@@ -108,7 +112,7 @@ class User(AbstractUser):
         verbose_name='Электронная почта')
     role = CharField(
         choices=ROLE_CHOICES,
-        default='user',
+        default=USER,
         max_length=10,
         verbose_name='Статус на сайте')
 
@@ -119,6 +123,22 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+    @property
+    def is_user_role(self):
+        return self.role == self.USER
+
+    @property
+    def is_moderator_role(self):
+        return self.role == self.MODERATOR
+
+    @property
+    def is_admin_role(self):
+        return self.role == self.ADMIN
+
+    @property
+    def is_superuser_role(self):
+        return self.role == self.SUPERUSER
 
 
 class GenreTitle(Model):
