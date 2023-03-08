@@ -68,7 +68,7 @@ class Title(Model):
         verbose_name='Описание')
     genre = ManyToManyField(
         Genre,
-        blank=True,
+        through='GenreToTitle',
         related_name='titles_gen',
         verbose_name='Жанр')
     name = CharField(
@@ -83,6 +83,15 @@ class Title(Model):
 
     def __str__(self):
         return self.name
+
+
+class GenreToTitle(Model):
+    """Модель связывающая произведения с жанром."""
+    title = ForeignKey(Title, on_delete=CASCADE)
+    genre = ForeignKey(Genre, on_delete=CASCADE)
+
+    def __str__(self):
+        return f'{self.title} {self.genre}'
 
 
 class User(AbstractUser):
