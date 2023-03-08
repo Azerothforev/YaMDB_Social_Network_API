@@ -10,6 +10,7 @@ from rest_framework.serializers import (
     ValidationError)
 
 from reviews.models import Category, Comment, Genre, Title, Review, User
+from reviews.models import USER_EMAIL_MAX_LENGTH, USER_USERNAME_MAX_LENGTH
 
 USER_FORBIDDEN_NAMES = ('me',)
 
@@ -90,8 +91,8 @@ class ReviewSerializer(ModelSerializer):
 
 
 class UserSignUpSerializer(Serializer):
-    username = RegexField(r'^[\w.@+-]+', max_length=150)
-    email = EmailField(max_length=254)
+    username = RegexField(r'^[\w.@+-]+', max_length=USER_USERNAME_MAX_LENGTH)
+    email = EmailField(max_length=USER_EMAIL_MAX_LENGTH)
 
     def validate_username(self, value):
         if value not in USER_FORBIDDEN_NAMES:

@@ -1,3 +1,4 @@
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import (
@@ -15,6 +16,8 @@ from django.db.models import (
     TextField,
     UniqueConstraint)
 
+USER_EMAIL_MAX_LENGTH: int = 254
+USER_USERNAME_MAX_LENGTH: int = 150
 
 # Внимание! Не нужно создавать BaseTextModel для Comment и Review, так как
 # в этом случае сервер не сможет запуститься с ошибкой:
@@ -107,7 +110,7 @@ class User(AbstractUser):
         max_length=32,
         verbose_name='Код подтверждения')
     email = EmailField(
-        max_length=254,
+        max_length=USER_EMAIL_MAX_LENGTH,
         unique=True,
         verbose_name='Электронная почта')
     role = CharField(
@@ -115,6 +118,11 @@ class User(AbstractUser):
         default=USER,
         max_length=10,
         verbose_name='Статус на сайте')
+    username = CharField(
+        max_length=USER_USERNAME_MAX_LENGTH,
+        unique=True,
+        validators=[UnicodeUsernameValidator()],
+        verbose_name = 'username')
 
     class Meta:
         ordering = ('username',)
