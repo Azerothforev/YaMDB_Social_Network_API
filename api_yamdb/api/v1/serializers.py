@@ -83,7 +83,6 @@ class ReviewSerializer(ModelSerializer):
 
 
 class UserSignUpSerializer(ModelSerializer):
-
     class Meta:
         model = User
         fields = ('username', 'email')

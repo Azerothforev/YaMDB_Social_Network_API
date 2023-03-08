@@ -73,7 +73,7 @@ def send_email(message: str, address: str) -> True:
 
 
 class CreateDestroyList(
-        GenericViewSet, CreateModelMixin, DestroyModelMixin, ListModelMixin):
+    GenericViewSet, CreateModelMixin, DestroyModelMixin, ListModelMixin):
     """Класс-шаблон."""
     pass
 
