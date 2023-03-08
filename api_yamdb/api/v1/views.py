@@ -1,3 +1,4 @@
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.mail import send_mail
 from django.db.models import Avg
 from django.shortcuts import get_object_or_404
@@ -34,6 +35,8 @@ from .serializers import (
 from reviews.models import Category, Genre, Review, Title, User
 
 CONFIRM_CODE_LENGTH: str = 32
+EMAIL_FROM_ADDRESS: str = 'YaMDB@yandex.ru'
+EMAIL_FROM_SUBJECT: str = 'YaMDB registration'
 EMAIL_MESSAGE_REGISTER: str = (
     'Добро пожаловать на YaMDB - самый лучший сайт по предоставлению народных '
     'рецензий на книги, музыку, фильмы и многое другое!\n\nДля получения '
@@ -55,7 +58,6 @@ EMAIL_MESSAGE_RESTORE: str = (
     'не указывали свою почту для регистрации на сайте YaMDB, пожалуйста, '
     'проигнорируйте это сообщение.')
 
-
 def generate_confirmation_code() -> str:
     """Генерирует случайную последовательность символов."""
     chars: str = string.ascii_letters + string.digits
@@ -65,10 +67,10 @@ def generate_confirmation_code() -> str:
 def send_email(message: str, address: str) -> True:
     """Отправляет сообщение с заданным текстом на указанный почтовый адрес."""
     send_mail(
-        from_email='YaMDB@yandex.ru',
+        from_email=EMAIL_FROM_ADDRESS,
         message=message,
         recipient_list=[address],
-        subject='YaMDB registration')
+        subject=EMAIL_FROM_SUBJECT)
     return True
 
 
@@ -78,42 +80,42 @@ class CreateDestroyList(
     pass
 
 
-class AuthSignupViewSet(GenericViewSet, CreateModelMixin):
+@api_view(('POST',))
+def auth_signup(request):
     """Производит регистрацию нового пользователя. Отправляет электронное
     письмо с confirmation_code для получения JWT access token'a.
     """
-    serializer_class = UserSignUpSerializer
-    queryset = User.objects.all()
-
-    def create(self, request, *args, **kwargs):
-        if 'username' in request.data and 'email' in request.data:
-            if request.data['username'] == 'me':
-                err = {"username": ["Username is invalid."]}
+    serializer = UserSignUpSerializer(data=request.data)
+    if serializer.is_valid(raise_exception=True):
+        username = request.data['username']
+        email = request.data['email']
+        try:
+            user = User.objects.get(username=username, email=email)
+        except Exception:
+            err = ''
+            if User.objects.filter(username=username).exists():
+                err = {"username": [f"User '{username}' already exists."]}
+            elif User.objects.filter(email=email).exists():
+                err = {"email": [f"User with '{email}' already exists."]}
+            if err:
                 return Response(err, status=status.HTTP_400_BAD_REQUEST)
-            try:
-                user = User.objects.get(
-                    username=request.data['username'],
-                    email=request.data['email'])
-                message = send_email(
-                    message=EMAIL_MESSAGE_RESTORE.format(
-                        user.confirmation_code),
+            user = None
+        if user:
+            send_email(
+                message=EMAIL_MESSAGE_RESTORE.format(
+                    user.confirmation_code),
                     address=user.email)
-                if message:
-                    return Response(request.data, status=status.HTTP_200_OK)
-            except Exception:
-                pass
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        confirmation_code = generate_confirmation_code()
-        message = send_email(
+            return Response(request.data, status=status.HTTP_200_OK)
+        confirmation_code = PasswordResetTokenGenerator.make_token
+        send_email(
             message=EMAIL_MESSAGE_REGISTER.format(confirmation_code),
             address=serializer.validated_data['email'])
-        if message:
-            serializer.save(confirmation_code=confirmation_code)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        else:
-            err = {"Server error": ["Please, come back and try again later!"]}
-            return Response(err, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        User.objects.create(
+            username=serializer.validated_data['username'],
+            email=serializer.validated_data['email'],
+            confirmation_code=confirmation_code)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(('POST',))

@@ -1,12 +1,17 @@
 from django.shortcuts import get_object_or_404
 from rest_framework.serializers import (
+    CharField,
+    EmailField,
     ModelSerializer,
     IntegerField,
+    Serializer,
     SlugRelatedField,
+    RegexField,
     ValidationError)
 
 from reviews.models import Category, Comment, Genre, Title, Review, User
 
+USER_FORBIDDEN_NAMES = ('me',)
 
 class CategoryField(SlugRelatedField):
 
@@ -84,11 +89,14 @@ class ReviewSerializer(ModelSerializer):
         return data
 
 
-class UserSignUpSerializer(ModelSerializer):
+class UserSignUpSerializer(Serializer):
+    username = RegexField(r'^[\w.@+-]+', max_length=150)
+    email = EmailField(max_length=254)
 
-    class Meta:
-        model = User
-        fields = ('username', 'email')
+    def validate_username(self, value):
+        if value not in USER_FORBIDDEN_NAMES:
+            return value
+        raise ValidationError(f"Имя пользователя '{value}' запрещено.")
 
 
 class UsersSerializerAdmin(ModelSerializer):
