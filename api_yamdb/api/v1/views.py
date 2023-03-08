@@ -137,16 +137,16 @@ class CommentViewSet(ModelViewSet):
     serializer_class = CommentSerializer
     permission_classes = (IsAuthorOrAdminOrReadOnly,)
 
-    def get_review(self, get_data):
+    def __get_review(self, get_data):
         return get_object_or_404(Review, pk=get_data.get('review_id'))
 
     def get_queryset(self):
-        return self.get_review(get_data=self.kwargs).comments.all()
+        return self.__get_review(get_data=self.kwargs).comments.all()
 
     def perform_create(self, serializer):
         serializer.save(
             author=self.request.user,
-            review=self.get_review(get_data=self.kwargs))
+            review=self.__get_review(get_data=self.kwargs))
 
 
 class GenreViewSet(CreateDestroyList):

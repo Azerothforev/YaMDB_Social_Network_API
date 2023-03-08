@@ -1,6 +1,4 @@
-from django.shortcuts import get_object_or_404
 from rest_framework.serializers import (
-    CharField,
     EmailField,
     ModelSerializer,
     IntegerField,
@@ -14,6 +12,7 @@ from reviews.models import USER_EMAIL_MAX_LENGTH, USER_USERNAME_MAX_LENGTH
 
 USER_FORBIDDEN_NAMES = ('me',)
 
+
 class CategoryField(SlugRelatedField):
 
     def to_representation(self, value):
@@ -21,6 +20,7 @@ class CategoryField(SlugRelatedField):
 
 
 class CategorySerializer(ModelSerializer):
+
     class Meta:
         model = Category
         fields = ('name', 'slug')
@@ -37,6 +37,7 @@ class CommentSerializer(ModelSerializer):
 
 
 class GenreSerializer(ModelSerializer):
+
     class Meta:
         model = Genre
         fields = ('name', 'slug')
@@ -80,11 +81,9 @@ class ReviewSerializer(ModelSerializer):
     def validate(self, data):
         if self.context['request'].method != 'POST':
             return data
-        title = get_object_or_404(
-            Title,
-            pk=self.context['view'].kwargs.get('title_id'))
+        title_id = self.context['request'].parser_context['kwargs']['title_id']
         author = self.context['request'].user
-        if Review.objects.filter(title_id=title, author=author).exists():
+        if Review.objects.filter(title_id=title_id, author=author).exists():
             raise ValidationError(
                 'Вы уже оставляли обзор на данное произведение')
         return data
@@ -110,6 +109,7 @@ class UsersSerializerAdmin(ModelSerializer):
 
 
 class UsersSerializer(UsersSerializerAdmin):
+
     class Meta:
         model = User
         fields = (
