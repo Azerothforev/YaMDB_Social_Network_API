@@ -19,6 +19,15 @@ from django.db.models import (
 USER_EMAIL_MAX_LENGTH: int = 254
 USER_USERNAME_MAX_LENGTH: int = 150
 
+
+def role_max_length(role_list):
+    max_length = 0
+    for role in role_list:
+        if len(role[0]) > max_length:
+            max_length = len(role[0])
+    return max_length
+
+
 # Внимание! Не нужно создавать BaseTextModel для Comment и Review, так как
 # в этом случае сервер не сможет запуститься с ошибкой:
 # reviews.Comment.review: (models.E006) The field 'review' clashes with the
@@ -116,13 +125,13 @@ class User(AbstractUser):
     role = CharField(
         choices=ROLE_CHOICES,
         default=USER,
-        max_length=10,
+        max_length=role_max_length(ROLE_CHOICES),
         verbose_name='Статус на сайте')
     username = CharField(
         max_length=USER_USERNAME_MAX_LENGTH,
         unique=True,
         validators=[UnicodeUsernameValidator()],
-        verbose_name = 'username')
+        verbose_name='username')
 
     class Meta:
         ordering = ('username',)
