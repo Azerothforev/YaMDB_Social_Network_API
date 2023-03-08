@@ -17,20 +17,20 @@ def router_register_func(router, patterns):
         router.register(data[0], data[1], basename=data[2])
 
 
-categories_patterns = [('categories', CategoryViewSet, 'categories')]
-genres_patterns = [('genres', GenreViewSet, 'genres')]
-titles_patterns = [('titles', TitleViewSet, 'titles'),
+titles_patterns = [
+    ('titles', TitleViewSet, 'titles'),
     (r'titles/(?P<title_id>\d+)/reviews', ReviewViewSet, 'reviews'),
     (r'titles/(?P<title_id>\d+)/reviews/(?P<review_id>\d+)/comments',
      CommentViewSet, 'comments')]
-users_patterns = [('users', UsersViewSet, 'users')]
-router = DefaultRouter()
-router_patterns = []
-for endpoint in (
-        categories_patterns, genres_patterns, titles_patterns, users_patterns):
+router_patterns = [
+    ('categories', CategoryViewSet, 'categories'),
+    ('genres', GenreViewSet, 'genres'),
+    ('users', UsersViewSet, 'users')]
+for endpoint in (titles_patterns,):
     for pattern in endpoint:
         router_patterns.append(pattern)
 
+router = DefaultRouter()
 router_register_func(router=router, patterns=router_patterns)
 
 v1_urlpatterns = [
