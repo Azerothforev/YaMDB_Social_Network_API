@@ -71,17 +71,9 @@ def auth_signup(request):
     serializer = UserSignUpSerializer(data=request.data)
     if not serializer.is_valid(raise_exception=True):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    username = serializer.data['username']
-    email = serializer.data['email']
-    try:
-        user, created = User.objects.get_or_create(
-            username=username, email=email)
-    except Exception as err:
-        if User.objects.filter(username=username).exists():
-            err = {"username": [f"User '{username}' already exists."]}
-        elif User.objects.filter(email=email).exists():
-            err = {"email": [f"User with '{email}' already exists."]}
-        return Response(err, status=status.HTTP_400_BAD_REQUEST)
+    user, created = User.objects.get_or_create(
+            username=serializer.data['username'],
+            email=serializer.data['email'])
     if not created:
         message = EMAIL_MESSAGE_REGISTER.format(user.confirmation_code)
     else:
