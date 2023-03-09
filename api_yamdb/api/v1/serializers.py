@@ -97,17 +97,19 @@ class UserSignUpSerializer(Serializer):
         if value not in USER_FORBIDDEN_NAMES:
             return value
         raise ValidationError(f"Имя пользователя '{value}' запрещено.")
-    
+
     def validate(self, data):
         err = ''
-        if (User.objects.filter(email=data['email']).exists() and
-                User.objects.get(
-                    email=data['email']).username != data['username']):
-            err = f"Данный адрес электронной почты уже занят"
-        elif (User.objects.filter(username=data['username']).exists() and
-                User.objects.get(
-                    username=data['username']).email != data['email']):
-            err = f"Данное имя пользователя уже занято"
+        username = data['username']
+        email = data['email']
+        if User.objects.filter(username=username, email=email).exists():
+            return data
+        elif (User.objects.filter(email=email).exists()
+                and User.objects.get(email=email).username != username):
+            err = 'Указанный адрес электронной почты уже занят.'
+        elif (User.objects.filter(username=username).exists()
+                and User.objects.get(username=username).email != email):
+            err = 'Указанное имя пользователя уже занято.'
         if err:
             raise ValidationError()
         return data
