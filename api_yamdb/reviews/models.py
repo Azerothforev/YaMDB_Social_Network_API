@@ -1,3 +1,4 @@
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import (
@@ -15,8 +16,19 @@ from django.db.models import (
     TextField,
     UniqueConstraint)
 
+USER_EMAIL_MAX_LENGTH: int = 254
+USER_USERNAME_MAX_LENGTH: int = 150
 
-# Внимание! Не нужно создавать BaseTextModel для Comment и Review, так как
+
+def role_max_length(role_list):
+    max_length = 0
+    for role in role_list:
+        if len(role[0]) > max_length:
+            max_length = len(role[0])
+    return max_length
+
+
+# TODO: Не нужно создавать BaseTextModel для Comment и Review, так как
 # в этом случае сервер не сможет запуститься с ошибкой:
 # reviews.Comment.review: (models.E006) The field 'review' clashes with the
 # field 'review' from model 'reviews.basetextmodel'.
@@ -68,7 +80,7 @@ class Title(Model):
         verbose_name='Описание')
     genre = ManyToManyField(
         Genre,
-        blank=True,
+        through='GenreToTitle',
         related_name='titles_gen',
         verbose_name='Жанр')
     name = CharField(
@@ -85,13 +97,26 @@ class Title(Model):
         return self.name
 
 
+class GenreToTitle(Model):
+    """Модель связывающая произведения с жанром."""
+    title = ForeignKey(Title, on_delete=CASCADE)
+    genre = ForeignKey(Genre, on_delete=CASCADE)
+
+    def __str__(self):
+        return f'{self.title} {self.genre}'
+
+
 class User(AbstractUser):
     """Модель пользователей."""
+    USER = 'user'
+    MODERATOR = 'moderator'
+    ADMIN = 'admin'
+    SUPERUSER = 'superuser'
     ROLE_CHOICES = [
-        ('user', 'user'),
-        ('moderator', 'moderator'),
-        ('admin', 'admin'),
-        ('superuser', 'superuser')]
+        (USER, 'пользователь'),
+        (MODERATOR, 'модератор'),
+        (ADMIN, 'администратор'),
+        (SUPERUSER, 'суперпользователь')]
     bio = TextField(
         blank=True,
         null=True,
@@ -103,14 +128,19 @@ class User(AbstractUser):
         max_length=32,
         verbose_name='Код подтверждения')
     email = EmailField(
-        max_length=254,
+        max_length=USER_EMAIL_MAX_LENGTH,
         unique=True,
         verbose_name='Электронная почта')
     role = CharField(
         choices=ROLE_CHOICES,
-        default='user',
-        max_length=10,
+        default=USER,
+        max_length=role_max_length(ROLE_CHOICES),
         verbose_name='Статус на сайте')
+    username = CharField(
+        max_length=USER_USERNAME_MAX_LENGTH,
+        unique=True,
+        validators=[UnicodeUsernameValidator()],
+        verbose_name='username')
 
     class Meta:
         ordering = ('username',)
@@ -119,6 +149,22 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+    @property
+    def is_user_role(self):
+        return self.role == self.USER
+
+    @property
+    def is_moderator_role(self):
+        return self.role == self.MODERATOR
+
+    @property
+    def is_admin_role(self):
+        return self.role == self.ADMIN
+
+    @property
+    def is_superuser_role(self):
+        return self.role == self.SUPERUSER
 
 
 class GenreTitle(Model):

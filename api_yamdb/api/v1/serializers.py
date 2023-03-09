@@ -1,11 +1,16 @@
-from django.shortcuts import get_object_or_404
 from rest_framework.serializers import (
+    EmailField,
     ModelSerializer,
     IntegerField,
+    Serializer,
     SlugRelatedField,
+    RegexField,
     ValidationError)
 
 from reviews.models import Category, Comment, Genre, Title, Review, User
+from reviews.models import USER_EMAIL_MAX_LENGTH, USER_USERNAME_MAX_LENGTH
+
+USER_FORBIDDEN_NAMES = ('me',)
 
 
 class CategoryField(SlugRelatedField):
@@ -15,6 +20,7 @@ class CategoryField(SlugRelatedField):
 
 
 class CategorySerializer(ModelSerializer):
+
     class Meta:
         model = Category
         fields = ('name', 'slug')
@@ -31,6 +37,7 @@ class CommentSerializer(ModelSerializer):
 
 
 class GenreSerializer(ModelSerializer):
+
     class Meta:
         model = Genre
         fields = ('name', 'slug')
@@ -74,21 +81,22 @@ class ReviewSerializer(ModelSerializer):
     def validate(self, data):
         if self.context['request'].method != 'POST':
             return data
-        title = get_object_or_404(
-            Title,
-            pk=self.context['view'].kwargs.get('title_id'))
+        title_id = self.context['request'].parser_context['kwargs']['title_id']
         author = self.context['request'].user
-        if Review.objects.filter(title_id=title, author=author).exists():
+        if Review.objects.filter(title_id=title_id, author=author).exists():
             raise ValidationError(
                 'Вы уже оставляли обзор на данное произведение')
         return data
 
 
-class UserSignUpSerializer(ModelSerializer):
+class UserSignUpSerializer(Serializer):
+    username = RegexField(r'^[\w.@+-]+', max_length=USER_USERNAME_MAX_LENGTH)
+    email = EmailField(max_length=USER_EMAIL_MAX_LENGTH)
 
-    class Meta:
-        model = User
-        fields = ('username', 'email')
+    def validate_username(self, value):
+        if value not in USER_FORBIDDEN_NAMES:
+            return value
+        raise ValidationError(f"Имя пользователя '{value}' запрещено.")
 
 
 class UsersSerializerAdmin(ModelSerializer):
@@ -101,6 +109,7 @@ class UsersSerializerAdmin(ModelSerializer):
 
 
 class UsersSerializer(UsersSerializerAdmin):
+
     class Meta:
         model = User
         fields = (

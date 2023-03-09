@@ -1,8 +1,8 @@
+from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.db.models import Avg
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-import random
 from rest_framework import status
 from rest_framework.decorators import action, api_view
 from rest_framework.filters import SearchFilter
@@ -14,7 +14,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 from rest_framework_simplejwt.tokens import AccessToken
-import string
 
 from .filters import TitleFilter
 from .permissions import (
@@ -34,6 +33,8 @@ from .serializers import (
 from reviews.models import Category, Genre, Review, Title, User
 
 CONFIRM_CODE_LENGTH: str = 32
+EMAIL_FROM_ADDRESS: str = 'YaMDB@yandex.ru'
+EMAIL_FROM_SUBJECT: str = 'YaMDB registration'
 EMAIL_MESSAGE_REGISTER: str = (
     'Добро пожаловать на YaMDB - самый лучший сайт по предоставлению народных '
     'рецензий на книги, музыку, фильмы и многое другое!\n\nДля получения '
@@ -56,64 +57,43 @@ EMAIL_MESSAGE_RESTORE: str = (
     'проигнорируйте это сообщение.')
 
 
-def generate_confirmation_code() -> str:
-    """Генерирует случайную последовательность символов."""
-    chars: str = string.ascii_letters + string.digits
-    return ''.join(random.choice(chars) for i in range(CONFIRM_CODE_LENGTH))
-
-
-def send_email(message: str, address: str) -> True:
-    """Отправляет сообщение с заданным текстом на указанный почтовый адрес."""
-    send_mail(
-        from_email='YaMDB@yandex.ru',
-        message=message,
-        recipient_list=[address],
-        subject='YaMDB registration')
-    return True
-
-
 class CreateDestroyList(
         GenericViewSet, CreateModelMixin, DestroyModelMixin, ListModelMixin):
-    """Класс-шаблон."""
+    """Класс-шаблон для GET(list), POST, DELETE запросов."""
     pass
 
 
-class AuthSignupViewSet(GenericViewSet, CreateModelMixin):
+@api_view(('POST',))
+def auth_signup(request):
     """Производит регистрацию нового пользователя. Отправляет электронное
     письмо с confirmation_code для получения JWT access token'a.
     """
-    serializer_class = UserSignUpSerializer
-    queryset = User.objects.all()
-
-    def create(self, request, *args, **kwargs):
-        if 'username' in request.data and 'email' in request.data:
-            if request.data['username'] == 'me':
-                err = {"username": ["Username is invalid."]}
-                return Response(err, status=status.HTTP_400_BAD_REQUEST)
-            try:
-                user = User.objects.get(
-                    username=request.data['username'],
-                    email=request.data['email'])
-                message = send_email(
-                    message=EMAIL_MESSAGE_RESTORE.format(
-                        user.confirmation_code),
-                    address=user.email)
-                if message:
-                    return Response(request.data, status=status.HTTP_200_OK)
-            except Exception:
-                pass
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        confirmation_code = generate_confirmation_code()
-        message = send_email(
-            message=EMAIL_MESSAGE_REGISTER.format(confirmation_code),
-            address=serializer.validated_data['email'])
-        if message:
-            serializer.save(confirmation_code=confirmation_code)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        else:
-            err = {"Server error": ["Please, come back and try again later!"]}
-            return Response(err, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    serializer = UserSignUpSerializer(data=request.data)
+    if not serializer.is_valid(raise_exception=True):
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    username = serializer.data['username']
+    email = serializer.data['email']
+    try:
+        user, created = User.objects.get_or_create(
+            username=username, email=email)
+    except Exception as err:
+        if User.objects.filter(username=username).exists():
+            err = {"username": [f"User '{username}' already exists."]}
+        elif User.objects.filter(email=email).exists():
+            err = {"email": [f"User with '{email}' already exists."]}
+        return Response(err, status=status.HTTP_400_BAD_REQUEST)
+    if not created:
+        message = EMAIL_MESSAGE_REGISTER.format(user.confirmation_code)
+    else:
+        confirmation_code = default_token_generator.make_token(user=user)
+        user.confirmation_code = confirmation_code
+        message = EMAIL_MESSAGE_RESTORE.format(confirmation_code)
+    send_mail(
+        from_email=EMAIL_FROM_ADDRESS,
+        message=message,
+        recipient_list=[user.email],
+        subject=EMAIL_FROM_SUBJECT)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 @api_view(('POST',))
@@ -157,16 +137,16 @@ class CommentViewSet(ModelViewSet):
     serializer_class = CommentSerializer
     permission_classes = (IsAuthorOrAdminOrReadOnly,)
 
-    def get_review(self, get_data):
+    def __get_review(self, get_data):
         return get_object_or_404(Review, pk=get_data.get('review_id'))
 
     def get_queryset(self):
-        return self.get_review(get_data=self.kwargs).comments.all()
+        return self.__get_review(get_data=self.kwargs).comments.all()
 
     def perform_create(self, serializer):
         serializer.save(
             author=self.request.user,
-            review=self.get_review(get_data=self.kwargs))
+            review=self.__get_review(get_data=self.kwargs))
 
 
 class GenreViewSet(CreateDestroyList):
