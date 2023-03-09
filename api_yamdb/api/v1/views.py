@@ -41,8 +41,8 @@ EMAIL_MESSAGE_REGISTER: str = (
     'доступа к сайту, пожалуйста, отправьте POST запрос на адрес '
     'http://127.0.0.1:8000/api/v1/auth/token/ для получения JWT-токена.\n\n'
     'Обращаем ваше внимание, что в теле запроса необходимо использовать '
-    'следующий confirmation code (без кавычек):\n"{}"\n\nДанное письмо было'
-    'сформировано автоматически, пожалуйста, не отвечайте на его.\n\nЕсли Вы'
+    'следующий confirmation code (без кавычек):\n"{}"\n\nДанное письмо было '
+    'сформировано автоматически, пожалуйста, не отвечайте на его.\n\nЕсли Вы '
     'не указывали свою почту для регистрации на сайте YaMDB, пожалуйста, '
     'проигнорируйте это сообщение.')
 EMAIL_MESSAGE_RESTORE: str = (
@@ -51,8 +51,8 @@ EMAIL_MESSAGE_RESTORE: str = (
     'получения доступа необходимо отправить POST запрос на адрес '
     'http://127.0.0.1:8000/api/v1/auth/token/ для получения JWT-токена.\n\n'
     'Обращаем ваше внимание, что в теле запроса необходимо использовать '
-    'следующий confirmation code (без кавычек):\n"{}"\n\nДанное письмо было'
-    'сформировано автоматически, пожалуйста, не отвечайте на его.\n\nЕсли Вы'
+    'следующий confirmation code (без кавычек):\n"{}"\n\nДанное письмо было '
+    'сформировано автоматически, пожалуйста, не отвечайте на его.\n\nЕсли Вы '
     'не указывали свою почту для регистрации на сайте YaMDB, пожалуйста, '
     'проигнорируйте это сообщение.')
 
@@ -72,14 +72,15 @@ def auth_signup(request):
     if not serializer.is_valid(raise_exception=True):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     user, created = User.objects.get_or_create(
-            username=serializer.data['username'],
-            email=serializer.data['email'])
+        username=serializer.data['username'],
+        email=serializer.data['email'])
     if not created:
-        message = EMAIL_MESSAGE_REGISTER.format(user.confirmation_code)
+        message = EMAIL_MESSAGE_RESTORE.format(user.confirmation_code)
     else:
         confirmation_code = default_token_generator.make_token(user=user)
         user.confirmation_code = confirmation_code
-        message = EMAIL_MESSAGE_RESTORE.format(confirmation_code)
+        user.save()
+        message = EMAIL_MESSAGE_REGISTER.format(confirmation_code)
     send_mail(
         from_email=EMAIL_FROM_ADDRESS,
         message=message,
