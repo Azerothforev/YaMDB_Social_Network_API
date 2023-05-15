@@ -35,7 +35,7 @@ Yatube API uses a number of open source projects to work properly:
 Перейти в целевую папку и склонировать репозиторий
 
 ```sh
-git clone https://github.com/Altair21817/api_yamdb.git
+git clone https://github.com/Altair21817/YaMDB_Social_Network_API.git
 ```
 
 Создать виртуальное окружение
@@ -79,7 +79,7 @@ pip install -r requirements.txt
 Перейти в рабочую папку проекта
 
 ```sh
-cd yatube_api/yatube_api/
+cd YaMDB_Social_Network_API/yatube_api/
 ```
 
 Создать миграции
